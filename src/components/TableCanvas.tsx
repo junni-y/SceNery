@@ -28,6 +28,7 @@ export const TableCanvas: React.FC = () => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [spacePressed, setSpacePressed] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
 
   // 连线拖拽草稿
   const [connectingFrom, setConnectingFrom] = useState<{
@@ -61,8 +62,58 @@ export const TableCanvas: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateSize = () => {
+      const { width, height } = container.getBoundingClientRect();
+      setViewportSize(current =>
+        current.width === width && current.height === height ? current : { width, height }
+      );
+    };
+
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(container);
+    updateSize();
+    return () => observer.disconnect();
+  }, []);
+
   if (!currentProject) return null;
   const { table, canvas } = currentProject.data;
+
+  const tableWidth = table.columns.reduce((total, column) => total + column.width, 36);
+  const tableHeight = table.rows.reduce((total, row) => total + row.height, 32);
+  const viewportWorldWidth = viewportSize.width / canvas.zoom;
+  const viewportWorldHeight = viewportSize.height / canvas.zoom;
+  const viewportLeft = -canvas.panX / canvas.zoom;
+  const viewportTop = -canvas.panY / canvas.zoom;
+
+  const contentBounds = canvas.freeCells.reduce(
+    (bounds, cell) => ({
+      minX: Math.min(bounds.minX, cell.x),
+      maxX: Math.max(bounds.maxX, cell.x + cell.width),
+      minY: Math.min(bounds.minY, cell.y),
+      maxY: Math.max(bounds.maxY, cell.y + cell.height)
+    }),
+    {
+      minX: table.x,
+      maxX: table.x + tableWidth,
+      minY: table.y,
+      maxY: table.y + tableHeight
+    }
+  );
+
+  const minViewX = Math.min(contentBounds.minX - viewportWorldWidth / 2, viewportLeft);
+  const maxViewX = Math.max(
+    contentBounds.maxX + viewportWorldWidth / 2,
+    viewportLeft + viewportWorldWidth
+  );
+  const minViewY = Math.min(contentBounds.minY - viewportWorldHeight / 2, viewportTop);
+  const maxViewY = Math.max(
+    contentBounds.maxY + viewportWorldHeight / 2,
+    viewportTop + viewportWorldHeight
+  );
 
   // 屏幕坐标转画布世界坐标
   const screenToWorld = (clientX: number, clientY: number) => {
@@ -323,6 +374,50 @@ export const TableCanvas: React.FC = () => {
           />
         )}
       </div>
+
+      {viewportSize.width > 0 && (
+        <div
+          onMouseDown={e => e.stopPropagation()}
+          style={{
+            left: 'clamp(12px, calc(50% - 100px), 300px)',
+            right: '240px',
+            bottom: '72px'
+          }}
+          className="absolute z-30 flex h-7 items-center rounded-full border border-slate-200 bg-white/90 px-3 shadow-sm"
+          title="拖动以水平平移画布"
+        >
+          <input
+            type="range"
+            min={minViewX}
+            max={Math.max(minViewX, maxViewX - viewportWorldWidth)}
+            step="any"
+            value={viewportLeft}
+            onChange={e => setPan(-Number(e.currentTarget.value) * canvas.zoom, canvas.panY)}
+            aria-label="水平平移画布"
+            className="canvas-pan-range w-full"
+          />
+        </div>
+      )}
+
+      {viewportSize.height > 200 && (
+        <div
+          onMouseDown={e => e.stopPropagation()}
+          className="absolute bottom-[176px] right-2 top-3 z-30 flex w-7 items-center justify-center rounded-full border border-slate-200 bg-white/90 py-3 shadow-sm"
+          title="拖动以垂直平移画布"
+        >
+          <input
+            type="range"
+            min={minViewY}
+            max={Math.max(minViewY, maxViewY - viewportWorldHeight)}
+            step="any"
+            value={viewportTop}
+            onChange={e => setPan(canvas.panX, -Number(e.currentTarget.value) * canvas.zoom)}
+            aria-label="垂直平移画布"
+            className="canvas-pan-range canvas-pan-range-vertical h-full"
+            style={{ writingMode: 'vertical-lr' }}
+          />
+        </div>
+      )}
 
       {/* 左下角画布控制浮岛 */}
       <div
