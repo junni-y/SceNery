@@ -1,0 +1,5 @@
+npm create vite@latest storyboard-pro -- --template react-ts
+cd storyboard-pro
+npm install zustand dexie uuid lucide-react clsx tailwind-merge
+npm install -D @types/uuid tailwindcss postcss autoprefixer
+npx tailwindcss init -p
