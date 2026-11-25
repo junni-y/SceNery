@@ -187,6 +187,7 @@ export const GridTable: React.FC<Props> = ({
             {/* 行首拖拽与序号区 */}
             <div
               draggable={!row.isHeader}
+              onMouseDown={e => e.stopPropagation()}
               onDragStart={() => setDragRowIdx(rIdx)}
               onDragOver={e => {
                 e.preventDefault();
